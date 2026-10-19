@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GridFPS — Arena Game</title>
+<meta name="description" content="Play GridFPS: arcade rounds, boss battles, XP unlocks and customizable loadouts.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23081726'/%3E%3Cpath d='M47 20A19 19 0 1 0 48 42V33H33' fill='none' stroke='%2372f8e9' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+#slots{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:2}
+#slots button{color:#b9dce3;background:#071b2ee6;border:1px solid #496d82;padding:10px 12px;min-width:95px;font-size:12px}
+#slots button.active{border-color:#7effe9;background:#174450;color:white}
+#slots small{display:block;color:#8eb0c2;font-size:10px;margin-bottom:4px}
+#deploy{margin-top:22px;background:#72f8e9;color:#052330;padding:14px 24px;border:0;font-weight:900}
+.loadout-form{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}
+.loadout-form label{font-size:12px;color:#a9dce5}
+.loadout-form select{width:100%;padding:12px;background:#102b3d;color:white;border:1px solid #548391;margin-top:6px}
+#lockHint{bottom:88px!important}
+@media(max-width:760px){
+  #slots{bottom:92px}
+  #slots button{min-width:65px;padding:7px;font-size:10px}
+  .loadout-form{grid-template-columns:1fr}
+}
+.menu-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.secondary-action{border:1px solid #6eb9bd;background:#0e2737;color:#d9fffa;padding:14px 18px;font-weight:800}
+.secondary-action:hover{background:#19505b}
+.shop-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:25px;color:#d8ffff}
+.shop-heading strong{font-size:17px}
+.shop-heading span{color:#9effe8;font-weight:900}
+.shop-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;max-height:255px;overflow:auto;margin-top:12px;padding-right:5px}
+.shop-item{border:1px solid #47717c;background:#102b3a;padding:11px;color:#e8ffff}
+.shop-item strong{display:block;font-size:15px}
+.shop-item small{color:#b3cdd6}
+.shop-item button{width:100%;margin-top:8px;border:1px solid #80dddf;background:#173c49;color:#d9ffff;padding:7px;font-weight:800}
+.shop-item button:disabled{opacity:.55;cursor:default}
+.rarity{font-size:12px;font-weight:900;letter-spacing:.08em}
+.rarity-common{color:#b9d1d6}
+.rarity-rare{color:#71c7ff}
+.rarity-epic{color:#d4a4ff}
+.rarity-legendary{color:#ffd481}
+.rarity-secret{color:#ff9ac5}
+#devPanel{display:none;margin-top:18px;border:1px solid #578e9a;padding:15px;background:#0a2431}
+#devPanel input{width:100%;padding:11px;margin:10px 0;background:#061d2b;color:#fff;border:1px solid #6ca4ad}
+#devMessage{min-height:18px;color:#a8eddd}
+#xpHud{color:#8cf8d9;margin-top:7px;font-size:14px;font-weight:800}
+.boss-tag{color:#ffce82;font-weight:900}
+#bossMeter{display:none;position:absolute;top:75px;left:50%;transform:translateX(-50%);width:min(380px,55vw);background:#081b28d9;border:1px solid #f8ba76;padding:8px;color:#ffe0ab;font-size:12px;font-weight:900;text-align:center}
+#bossFill{height:6px;background:#ffb96a;margin-top:5px;width:100%}
+@media(max-width:600px){
+  .shop-grid{grid-template-columns:1fr}
+  .menu-actions{display:grid}
+  .panel{padding:22px}
+}
+:root{font-family:Inter,ui-sans-serif,system-ui,Arial,sans-serif;color:#edfaff;background:#060c18}
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden}
+button{font:inherit;cursor:pointer}
+#game{display:block;width:100vw;height:100vh;object-fit:fill;background:#07111f;image-rendering:auto}
+#vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 32%,#01040a35 100%)}
+#hud{position:fixed;inset:0;pointer-events:none;display:none}
+#hud.on{display:block}
+.hud-top{position:absolute;top:22px;left:24px;right:24px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.brand{color:#8df7ef;font-size:13px;font-weight:900;letter-spacing:.24em;text-shadow:0 0 16px #13e2dc}
+.sub{font-size:11px;color:#8faabd;letter-spacing:.16em;margin-top:5px}
+.stats{display:flex;gap:10px}
+.stat{min-width:85px;padding:8px 13px;border:1px solid #5791aa70;background:#071422ad;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%)}
+.stat span{display:block;font-size:10px;color:#8dadc0;letter-spacing:.17em}
+.stat b{font-size:22px;color:#f4fcff;font-variant-numeric:tabular-nums}
+#bottom{position:absolute;bottom:24px;left:24px;right:24px;display:flex;justify-content:space-between;align-items:flex-end}
+.meter{width:min(230px,32vw)}
+.label{font-size:11px;font-weight:800;letter-spacing:.2em;color:#a9e7e9;display:flex;justify-content:space-between;margin-bottom:8px}
+.track{height:12px;border:1px solid #9ceaf77a;background:#091724;padding:2px}
+.fill{width:100%;height:100%;background:linear-gradient(90deg,#12bacd,#7cfbea);box-shadow:0 0 12px #18eee1}
+#ammo{font-size:42px;font-weight:900;line-height:1;text-align:right;color:#fff;text-shadow:0 0 18px #46dffa;font-variant-numeric:tabular-nums}
+#ammo small{font-size:14px;color:#8bc2d3}
+#reload{height:4px;margin-top:9px;background:#1b3543;width:160px;display:none}
+#reload div{background:#fbba69;height:100%;width:0}
+#crosshair{position:absolute;top:50%;left:50%;width:22px;height:22px;transform:translate(-50%,-50%);filter:drop-shadow(0 0 5px #a7ffff)}
+#crosshair:before,#crosshair:after{content:"";position:absolute;background:#caffff}
+#crosshair:before{height:2px;width:22px;top:10px}
+#crosshair:after{width:2px;height:22px;left:10px}
+#crosshair.hit:before,#crosshair.hit:after{background:#ffdf75}
+#crosshair.scoped{display:none}
+#notice{position:absolute;top:22%;left:50%;transform:translateX(-50%);font-size:17px;font-weight:900;letter-spacing:.22em;text-shadow:0 0 18px #00e2fa;opacity:0;text-align:center;white-space:nowrap}
+#damage{position:fixed;inset:0;pointer-events:none;background:#f0597055;opacity:0}
+#overlay{position:fixed;inset:0;display:flex;justify-content:center;align-items:center;padding:20px;background:linear-gradient(130deg,#04101ce8,#061421db),repeating-linear-gradient(0deg,transparent 0 41px,#37f6ed12 42px);backdrop-filter:blur(6px)}
+.panel{width:min(670px,100%);max-height:92vh;overflow-y:auto;padding:36px 40px;border:1px solid #5ce3e97c;background:linear-gradient(145deg,#102436f0,#07121ff7);box-shadow:0 30px 90px #000b,0 0 50px #0ae9e020;position:relative}
+.panel:before{content:"";position:absolute;top:0;left:0;height:4px;width:40%;background:#5afbee;box-shadow:0 0 25px #5afbee}
+.eyebrow{color:#64efe7;font-weight:900;font-size:12px;letter-spacing:.34em}
+h1{font-size:clamp(42px,8vw,76px);line-height:.95;letter-spacing:-.06em;margin:21px 0 18px;color:#f3ffff;text-shadow:0 0 25px #4af4f34d}
+h1 em{font-style:normal;color:#68f5e9}
+.intro{color:#bbd4e1;line-height:1.6;margin-bottom:24px}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 30px;color:#a8c4d1;font-size:13px}
+.controls strong{color:#e1ffff}
+#play{border:0;background:#72f8e9;color:#061b23;padding:15px 26px;font-size:14px;font-weight:950;letter-spacing:.17em;box-shadow:0 0 28px #48ffea50;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+#play:hover{background:#fff}
+#footer{margin-top:17px;font-size:11px;color:#6e94a3;letter-spacing:.1em}
+#weaponSelect{display:none}
+.loadout{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}
+.weapon-card{border:1px solid #4fb9c477;background:#091e2e;color:#eaffff;text-align:left;padding:14px 16px;min-height:122px;transition:.2s}
+.weapon-card:hover,.weapon-card:focus-visible{border-color:#7cfff1;background:#173b47;transform:translateY(-3px)}
+.weapon-card strong{display:block;font-size:18px;margin:6px 0}
+.weapon-card span{color:#acd5de;font-size:12px;line-height:1.4}
+.weapon-card .symbol{font-size:23px;color:#72f8e9;line-height:1}
+#lockHint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:none;z-index:3;padding:10px 14px;background:#081a29e8;border:1px solid #78e8e78c;color:#d8faff;text-align:center;font-size:12px;max-width:min(520px,95vw)}
+#lockHint button{background:#60f1e6;border:0;color:#08222b;padding:6px 9px;margin:3px 2px;font-weight:800;font-size:11px}
+#openTab{display:inline-block;color:#77f9ed;margin-top:12px;font-size:12px}
+.setups{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.setups label{font-size:11px;font-weight:800;letter-spacing:.15em;color:#8edddf}
+.setups select,.setups input{display:block;width:100%;background:#0b2232;color:#eaffff;border:1px solid #60acb880;border-radius:3px;padding:11px;margin-top:7px;font:inherit;font-size:14px}
+#customCounts{display:none;grid-column:1/-1;grid-template-columns:1fr 1fr;gap:12px}
+.hud-team{font-size:11px;letter-spacing:.1em;color:#bbfaff;margin-top:5px}
+#reloadButton{pointer-events:auto;display:block;margin:6px 0 0 auto;padding:6px 9px;border:1px solid #67ebea9a;background:#08202cd9;color:#9efcf1;font-weight:900;font-size:11px;letter-spacing:.08em}
+#reloadButton:hover{background:#18505a}
+@media(max-width:600px){
+  .panel{padding:26px}
+  .stats{gap:4px}
+  .stat{padding:6px;min-width:55px}
+  .stat b{font-size:16px}
+  .stat span{font-size:8px}
+  .brand{font-size:10px}
+}
+#onlinePanel{display:none}
+#onlinePanel input,#onlinePanel select{display:block;width:100%;background:#0b2232;color:#eaffff;border:1px solid #60acb880;padding:12px;margin:7px 0 15px;font:inherit}
+#onlinePanel h1{font-size:48px}
+#onlinePanel label{font-size:14px;color:#bbefec}
+#roomMessage{color:#ffd481;min-height:26px;margin:12px 0}
+#onlineHud{display:none;position:fixed;top:115px;right:24px;background:#0a2034df;border:1px solid #65d8d0;padding:12px;z-index:4;font-size:14px;color:#dffffc;max-width:320px}
+#onlineHud button{border:1px solid #7ca2af;padding:7px 12px;background:#19384d;color:white;margin-top:9px}
+#matchScore{font-size:24px;font-weight:900;margin-top:8px}
+#onlineFeedback{color:#9af7df;margin-top:6px}
+#cheatPanel{display:none;position:fixed;top:22px;right:22px;z-index:10;width:min(310px,calc(100vw - 44px));padding:22px;background:#111d30f7;border:1px solid #bb9af6;box-shadow:0 15px 60px #000b;color:#eaf9ff}
+#cheatPanel h2{font-size:22px;margin:0 0 10px;color:#d2b4ff}
+#cheatPanel p{font-size:14px;color:#b6cbd6;line-height:1.5}
+#cheatPanel label{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #6b5b8555;cursor:pointer;font-size:16px}
+#cheatPanel input{width:20px;height:20px;accent-color:#c5a6ff}
+#cheatPanel label small{display:block;font-size:12px;color:#a9bfd1;margin-top:3px}
+#cheatPanel button{width:100%;padding:10px;background:#a58be4;color:#141a2b;border:0;font-weight:900;margin-top:12px}
+.brand{color:#d1d8c5;text-shadow:none}
+.stat{background:#17201a80;border-color:#b1b9a540}
+.sub,.label{color:#d0d7c6}
+.fill{box-shadow:none}
+#ammo{text-shadow:0 2px 6px #0009}
+#crosshair{opacity:.7;filter:drop-shadow(0 1px 2px #000)}
+#slots button{background:#172019a8;border-color:#a3b09a44}
+#slots button.active{background:#37432ea8;border-color:#d2ddbe}
+#vignette{background:radial-gradient(ellipse at center,transparent 48%,#10180e36 100%)}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="First person combat arena"></canvas>
+<div id="vignette"></div>
+<div id="damage"></div>
+
+<div id="hud">
+  <div class="hud-top">
+    <div>
+      <div class="brand">GridFPS // FIELD OPS</div>
+      <div class="sub" id="weaponName">DAYTIME TRAINING ARENA</div>
+      <div class="hud-team" id="teamStatus">TEAM 1 · OPPONENTS 1</div>
+      <div id="xpHud">XP 0</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>ROUND</span><b id="wave">1</b></div>
+      <div class="stat"><span>SCORE</span><b id="score">0</b></div>
+      <div class="stat"><span>BEST</span><b id="best">0</b></div>
+    </div>
+  </div>
+  <div id="bossMeter">BOSS ROUND<div id="bossFill"></div></div>
+  <div id="notice"></div>
+  <div id="crosshair"></div>
+  <div id="bottom">
+    <div class="meter">
+      <div class="label"><span>HEALTH</span><span id="healthText">200 / 200</span></div>
+      <div class="track"><div id="healthFill" class="fill"></div></div>
+    </div>
+    <div>
+      <div id="ammo">12 <small>/ ∞</small></div>
+      <button id="reloadButton" type="button">RELOAD [R]</button>
+      <div id="reload"><div></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="lockHint">
+  Mouse lock was blocked in this preview. Drag to turn, or use ← →.
+  For mouse lock, open the game in its own tab.
+  <button id="retryLock">TRY LOCK</button>
+  <button id="fullTab">OPEN FULL TAB ↗</button>
+</div>
+
+<section id="cheatPanel" aria-label="Developer cheats">
+  <h2>DEVELOPER CHEATS</h2>
+  <p>Toggle each cheat independently. Computer matches only.</p>
+  <label>
+    <input id="cheatInvincible" type="checkbox">
+    <span>Invincibility<small>Take no damage from opponents.</small></span>
+  </label>
+  <label>
+    <input id="cheatAimbot" type="checkbox">
+    <span>Aimbot<small>Automatically aim at visible opponents.</small></span>
+  </label>
+  <label>
+    <input id="cheatXray" type="checkbox">
+    <span>X-ray<small>See opponents through walls.</small></span>
+  </label>
+  <button id="closeCheats" type="button">CLOSE PANEL</button>
+</section>
+
+<div id="onlineHud">
+  <div id="roomStatus"></div>
+  <div id="matchScore"></div>
+  <div id="onlineFeedback"></div>
+  <button id="leaveRoom" type="button">LEAVE ROOM</button>
+</div>
+
+<div id="slots" style="display:none">
+  <button data-slot="0"></button>
+  <button data-slot="1"></button>
+  <button data-slot="2"></button>
+  <button data-slot="3"></button>
+</div>
+
+<div id="overlay">
+  <div class="panel">
+    <div class="eyebrow">ARCADE // SOLO + ONLINE</div>
+
+    <div id="menuContent">
+      <h1>Grid<em>FPS</em></h1>
+      <div class="intro" id="description">
+        Battle through rounds, earn XP, and build your loadout.
+        Every 10th round has a boss.
+      </div>
+      <div class="menu-actions">
+        <button id="play">PLAY →</button>
+        <button id="onlineButton" class="secondary-action" type="button">ONLINE 1v1</button>
+        <button id="developer" class="secondary-action" type="button">DEVELOPER MODE UNLOCK</button>
+      </div>
+      <div id="devPanel">
+        <label for="devPassword">Developer password</label>
+        <input id="devPassword" type="password" autocomplete="off" placeholder="Enter password">
+        <button id="devUnlock" class="secondary-action" type="button">UNLOCK</button>
+        <div id="devMessage" role="status"></div>
+      </div>
+      <div id="footer">
+        WASD move · Left-click tag · Hold right-click scope ·
+        1–4 slots · R reload · ESC pause
+      </div>
+    </div>
+
+    <div id="onlinePanel">
+      <h1>ONLINE <em>1v1</em></h1>
+      <div class="intro">
+        Create a room and share its code with a friend.
+        200 HP each · First to 5 wins.
+        Choose your unlocked weapon before creating or joining a room.
+      </div>
+      <label for="playerName">YOUR NAME</label>
+      <input id="playerName" maxlength="18" value="Player" autocomplete="nickname">
+      <label for="onlineMap">MAP (HOST CHOOSES)</label>
+      <select id="onlineMap">
+        <option value="open">Sunny Field</option>
+        <option value="depot">Daylight Depot</option>
+        <option value="islands">Tropical Islands</option>
+      </select>
+      <label for="onlineWeapon">YOUR WEAPON</label>
+      <select id="onlineWeapon"></select>
+      <div id="onlineWeaponInfo" style="color:#b5d9e6;font-size:14px;margin-bottom:15px"></div>
+      <button id="createRoom" class="secondary-action" type="button">CREATE ROOM</button>
+      <label for="roomCode" style="display:block;margin-top:22px">JOIN A FRIEND'S ROOM</label>
+      <input id="roomCode" maxlength="6" placeholder="6-character room code" autocapitalize="characters" autocomplete="off">
+      <div class="menu-actions">
+        <button id="joinRoom" class="secondary-action" type="button">JOIN ROOM</button>
+        <button id="onlineBack" class="secondary-action" type="button">BACK</button>
+      </div>
+      <div id="roomMessage" role="status"></div>
+    </div>
+
+    <div id="weaponSelect">
+      <h1>CHOOSE YOUR<br><em>LOADOUT</em></h1>
+      <div class="setups">
+        <label>MAP
+          <select id="mapChoice">
+            <option value="open">Sunny Field</option>
+            <option value="depot">Daylight Depot</option>
+            <option value="islands">Tropical Islands</option>
+          </select>
+        </label>
+        <label>MATCH
+          <select id="modeChoice">
+            <option value="1v1">Solo — you vs opponents</option>
+            <option value="2v2">Squad — one teammate</option>
+            <option value="custom">Custom teams</option>
+          </select>
+        </label>
+        <div id="customCounts">
+          <label>HUMAN TEAMMATES
+            <input id="allyChoice" type="number" min="0" max="4" value="1">
+          </label>
+          <label>OPPONENTS
+            <input id="enemyChoice" type="number" min="1" max="8" value="2">
+          </label>
+        </div>
+      </div>
+      <div class="shop-heading">
+        <strong>WEAPON SHOP</strong>
+        <span id="shopXp">0 XP</span>
+      </div>
+      <div class="intro" style="margin:5px 0 0;font-size:13px">
+        Earn XP in matches. Purchases are permanent on this browser; no real money.
+      </div>
+      <div class="shop-grid" id="shopGrid"></div>
+      <div class="loadout-form">
+        <label>PRIMARY<select id="primaryChoice"></select></label>
+        <label>SECONDARY<select id="secondaryChoice"></select></label>
+        <label>CLOSE COMBAT<select id="meleeChoice"></select></label>
+        <label>THROWABLE<select id="throwChoice"></select></label>
+      </div>
+      <button id="deploy">ENTER ARENA</button>
+      <div class="intro" style="margin-top:15px">
+        1–4: switch equipment · Hold right-click: scope · G: throwable
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas=document.getElementById('game');
+  const ctx=canvas.getContext('2d',{alpha:false});
+  const $=id=>document.getElementById(id);
+  const overlay=$('overlay'),hud=$('hud');
+  const W=960,H=540,BASE_FOV=Math.PI/2.25,MAX_RAY=40;
+  canvas.width=W;
+  canvas.height=H;
+
+  const SIZE=26;
+  let map,mapName='open',match={allies:0,enemies:1};
+
+  function buildMap(name){
+    mapName=name;
+    map=Array.from({length:SIZE},(_,y)=>
+      Array.from({length:SIZE},(_,x)=>
+        x===0||y===0||x===SIZE-1||y===SIZE-1?1:0
+      )
+    );
+    const rect=(x,y,w,h,t=2)=>{
+      for(let yy=y;yy<y+h;yy++)
+        for(let xx=x;xx<x+w;xx++)map[yy][xx]=t;
+    };
+    if(name==='open')
+      for(const [x,y] of [[4,4],[20,4],[4,20],[20,20]])rect(x,y,2,2);
+    if(name==='depot'){
+      for(const [x,y] of [[6,5],[18,5],[6,17],[18,17]])rect(x,y,2,4);
+      rect(11,5,4,2);
+      rect(11,19,4,2);
+      rect(3,12,3,2);
+      rect(20,12,3,2);
+    }
+    if(name==='islands')
+      for(const [x,y] of [[5,5],[11,5],[19,5],[5,12],[19,12],[5,19],[11,19],[19,19]])
+        rect(x,y,2,2);
+  }
+
+  buildMap('open');
+
+  const WEAPONS={
+    trainer:{name:'TRAINING EMITTER',slot:'primary',rarity:'common',cost:0,ammo:14,damage:1,cooldown:.26,reload:1.1,scopeFov:.58,hitWidth:.4,style:'trainer'},
+    m4a1:{name:'M4A1',slot:'primary',rarity:'rare',cost:350,ammo:30,damage:2,cooldown:.15,reload:1.5,scopeFov:.46,hitWidth:.3,style:'m4'},
+    ak47:{name:'AK-47',slot:'primary',rarity:'rare',cost:450,ammo:30,damage:2,cooldown:.18,reload:1.65,scopeFov:.49,hitWidth:.34,style:'ak'},
+    mp5:{name:'MP5',slot:'primary',rarity:'common',cost:220,ammo:32,damage:1,cooldown:.085,reload:1.3,scopeFov:.52,hitWidth:.38,style:'smg'},
+    p90:{name:'P90',slot:'primary',rarity:'epic',cost:780,ammo:50,damage:2,cooldown:.075,reload:1.55,scopeFov:.48,hitWidth:.33,style:'smg'},
+    scar:{name:'SCAR-L',slot:'primary',rarity:'epic',cost:900,ammo:28,damage:3,cooldown:.22,reload:1.8,scopeFov:.43,hitWidth:.29,style:'m4'},
+    awp:{name:'AWP',slot:'primary',rarity:'legendary',cost:1400,ammo:5,damage:6,cooldown:1,reload:2.1,scopeFov:.24,hitWidth:.23,style:'long'},
+    m249:{name:'M249',slot:'primary',rarity:'legendary',cost:1700,ammo:80,damage:2,cooldown:.075,reload:2.6,scopeFov:.58,hitWidth:.35,style:'heavy'},
+    nova:{name:'NOVA CORE',slot:'primary',rarity:'legendary',cost:2200,ammo:12,damage:8,cooldown:.8,reload:2.4,scopeFov:.34,hitWidth:.57,style:'secret'},
+    eclipse:{name:'ECLIPSE-X',slot:'primary',rarity:'secret',cost:0,ammo:80,damage:12,cooldown:.07,reload:1,scopeFov:.28,hitWidth:.56,style:'secret'},
+    phantom:{name:'PHANTOM ZERO',slot:'primary',rarity:'secret',cost:0,ammo:40,damage:16,cooldown:.13,reload:.8,scopeFov:.3,hitWidth:.52,style:'secret'},
+    sideTrainer:{name:'TRAINING SIDEARM',slot:'secondary',rarity:'common',cost:0,ammo:10,damage:1,cooldown:.3,reload:1,scopeFov:.56,hitWidth:.42,style:'side'},
+    glock:{name:'GLOCK 17',slot:'secondary',rarity:'common',cost:180,ammo:17,damage:2,cooldown:.27,reload:1.1,scopeFov:.56,hitWidth:.37,style:'side'},
+    m1911:{name:'M1911',slot:'secondary',rarity:'rare',cost:320,ammo:8,damage:3,cooldown:.4,reload:1.25,scopeFov:.52,hitWidth:.36,style:'side'},
+    deagle:{name:'DESERT EAGLE',slot:'secondary',rarity:'epic',cost:700,ammo:7,damage:5,cooldown:.55,reload:1.6,scopeFov:.48,hitWidth:.3,style:'side'},
+    baton:{name:'TRAINING BATON',slot:'melee',rarity:'common',cost:0,ammo:1,damage:2,cooldown:.55,reload:0,scopeFov:1,hitWidth:.65,kind:'melee'},
+    glove:{name:'PULSE GLOVE',slot:'melee',rarity:'rare',cost:260,ammo:1,damage:3,cooldown:.32,reload:0,scopeFov:1,hitWidth:.8,kind:'melee'},
+    pulse:{name:'PULSE ORB',slot:'throw',rarity:'common',cost:0,ammo:3,damage:2,cooldown:.6,reload:0,scopeFov:1,hitWidth:0,kind:'throw'},
+    shield:{name:'SHIELD POD',slot:'throw',rarity:'rare',cost:300,ammo:2,damage:0,cooldown:.7,reload:0,scopeFov:1,hitWidth:0,kind:'throw'}
+  };
+
+  const STARTER=['trainer','sideTrainer','baton','pulse'];
+  let profile={xp:0,owned:STARTER.slice(),developer:false};
+
+  try{
+    const saved=JSON.parse(localStorage.getItem('gridfps-profile-v2')||'null');
+    if(saved&&Number.isFinite(saved.xp)&&Array.isArray(saved.owned)){
+      profile={
+        xp:Math.max(0,Math.floor(saved.xp)),
+        owned:[...new Set([
+          ...STARTER,
+          ...saved.owned.filter(id=>
+            WEAPONS[id]&&(WEAPONS[id].rarity!=='secret'||saved.developer===true)
+          )
+        ])],
+        developer:saved.developer===true
+      };
+    }
+  }catch(e){}
+
+  const cheats={invincible:false,aimbot:false,xray:false};
+
+  try{
+    const saved=JSON.parse(localStorage.getItem('gridfps-cheats')||'{}');
+    for(const key of Object.keys(cheats))cheats[key]=saved[key]===true;
+  }catch(e){}
+
+  function cheatActive(key){
+    return profile.developer&&!multiplayer&&cheats[key]===true;
+  }
+
+  function refreshCheats(){
+    for(const [key,id] of [
+      ['invincible','cheatInvincible'],
+      ['aimbot','cheatAimbot'],
+      ['xray','cheatXray']
+    ])$(id).checked=cheats[key];
+    if(profile.developer)$('developer').textContent='DEVELOPER SETTINGS';
+  }
+
+  let resumeAfterCheats=false;
+
+  function closeCheats(){
+    $('cheatPanel').style.display='none';
+    const resume=resumeAfterCheats;
+    resumeAfterCheats=false;
+    if(resume&&state==='pause')start();
+  }
+
+  function openCheats(){
+    if(!profile.developer||multiplayer)return;
+    resumeAfterCheats=state==='play';
+    if(resumeAfterCheats){
+      keys={};
+      pause();
+      document.exitPointerLock?.();
+    }
+    refreshCheats();
+    $('cheatPanel').style.display='block';
+  }
+
+  for(const [key,id] of [
+    ['invincible','cheatInvincible'],
+    ['aimbot','cheatAimbot'],
+    ['xray','cheatXray']
+  ]){
+    $(id).addEventListener('change',()=>{
+      if(!profile.developer||multiplayer)return;
+      cheats[key]=$(id).checked;
+      try{localStorage.setItem('gridfps-cheats',JSON.stringify(cheats))}catch(e){}
+    });
+  }
+
+  $('closeCheats').addEventListener('click',closeCheats);
+
+  function aimAtEnemy(){
+    if(!cheatActive('aimbot')||!player||WEAPONS[player.weapon].kind)return;
+    const target=drones
+      .filter(d=>d.team==='enemy'&&visible(player,d))
+      .sort((a,b)=>
+        Math.hypot(a.x-player.x,a.y-player.y)-
+        Math.hypot(b.x-player.x,b.y-player.y)
+      )[0];
+    if(target){
+      player.angle=Math.atan2(target.y-player.y,target.x-player.x);
+      player.pitch=clamp(-player.z*32+(player.slide>0?27:0),-64,64);
+    }
+  }
+
+  function saveProfile(){
+    try{
+      localStorage.setItem('gridfps-profile-v2',JSON.stringify({
+        xp:profile.xp,owned:profile.owned,developer:profile.developer
+      }));
+    }catch(e){}
+  }
+
+  function awardXP(amount){
+    profile.xp+=amount;
+    saveProfile();
+    if(player)updateHud();
+  }
+
+  function populateShop(){
+    $('shopXp').textContent=profile.xp+' XP';
+    $('shopGrid').replaceChildren();
+
+    for(const [id,w] of Object.entries(WEAPONS)){
+      if(w.cost===0||w.rarity==='secret')continue;
+
+      const card=document.createElement('div');
+      card.className='shop-item';
+      const title=document.createElement('strong');
+      title.textContent=w.name;
+      const detail=document.createElement('small');
+      detail.textContent=w.slot.toUpperCase()+' · '+w.ammo+' CAPACITY';
+      const rarity=document.createElement('div');
+      rarity.className='rarity rarity-'+w.rarity;
+      rarity.textContent=w.rarity.toUpperCase();
+      const buy=document.createElement('button');
+      buy.type='button';
+      const owned=profile.developer||profile.owned.includes(id);
+      buy.textContent=owned?'OWNED':w.cost+' XP';
+      buy.disabled=owned||profile.xp<w.cost;
+
+      buy.addEventListener('click',()=>{
+        if(profile.developer||profile.owned.includes(id)||profile.xp<w.cost)return;
+        profile.xp-=w.cost;
+        profile.owned.push(id);
+        saveProfile();
+        populateShop();
+        if(w.slot==='primary')$('primaryChoice').value=id;
+        else if(w.slot==='secondary')$('secondaryChoice').value=id;
+      });
+
+      card.append(title,rarity,detail,buy);
+      $('shopGrid').append(card);
+    }
+
+    for(const [slot,selectId,defaultId] of [
+      ['primary','primaryChoice','trainer'],
+      ['secondary','secondaryChoice','sideTrainer'],
+      ['melee','meleeChoice','baton'],
+      ['throw','throwChoice','pulse']
+    ]){
+      const select=$(selectId),selected=select.value;
+      select.replaceChildren();
+      for(const [id,w] of Object.entries(WEAPONS)){
+        if(w.slot===slot&&(profile.developer||profile.owned.includes(id))){
+          const option=document.createElement('option');
+          option.value=id;
+          option.textContent=w.name+' · '+w.rarity.toUpperCase();
+          select.append(option);
+        }
+      }
+      select.value=[...select.options].some(o=>o.value===selected)?selected:defaultId;
+    }
+  }
+
+  let multiplayer=null,netBusy=false,nextPoll=0;
+  let queuedShot=false,queuedReload=false,joiningRoom=false;
+  let projectiles=[],rings=[],player,drones=[],particles=[],shots=[],keys={};
+  let state='menu',time=0,last=0,zBuffer=new Float32Array(W);
+  let shake=0,flash=0,hitTimer=0,noticeTimer=0,audio,respawnTimer=0;
+  let hadMouseLock=false,lockFailed=false,viewFov=BASE_FOV;
+  let high=0;
+
+  try{high=Number(localStorage.getItem('neon-grid-best'))||0}catch(e){}
+  $('best').textContent=high;
+
+  const rand=(a,b)=>a+Math.random()*(b-a);
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+
+  function wall(x,y){
+    return map[Math.floor(y)]?.[Math.floor(x)]??1;
+  }
+
+  function free(x,y,r=.24){
+    return !wall(x-r,y-r)&&!wall(x+r,y-r)&&!wall(x-r,y+r)&&!wall(x+r,y+r);
+  }
+
+  function sound(freq=400,dur=.1,type='sawtooth',gain=.045,end=80){
+    try{
+      audio=audio||new (window.AudioContext||window.webkitAudioContext)();
+      if(audio.state==='suspended')audio.resume();
+      const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime;
+      o.type=type;
+      o.frequency.setValueAtTime(freq,t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(1,end),t+dur);
+      g.gain.setValueAtTime(gain,t);
+      g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      o.connect(g);
+      g.connect(audio.destination);
+      o.start(t);
+      o.stop(t+dur);
+    }catch(e){}
+  }
+
+  function notify(s){
+    $('notice').textContent=s;
+    noticeTimer=2.1;
+  }
+
+  function switchSlot(slot){
+    if(!player||state!=='play'||multiplayer)return;
+    player.magazines[player.slot]=player.ammo;
+    player.slot=slot;
+    player.weapon=player.loadout[slot];
+    player.ammo=player.magazines[slot];
+    player.reload=0;
+    player.scoped=false;
+    player.cooldown=.2;
+    updateHud();
+  }
+
+  function updateHud(){
+    $('weaponName').textContent=
+      WEAPONS[player.weapon].name+' · '+
+      $('mapChoice').selectedOptions[0].textContent.toUpperCase();
+
+    document.querySelectorAll('[data-slot]').forEach((b,i)=>{
+      b.innerHTML='<small>'+
+        ['1 PRIMARY','2 SECONDARY','3 CLOSE COMBAT','4 THROWABLE'][i]+
+        '</small>'+WEAPONS[player.loadout[i]].name;
+      b.classList.toggle('active',i===player.slot);
+    });
+
+    $('xpHud').textContent=multiplayer?'ONLINE 1v1 · FIRST TO 5':profile.xp+' XP';
+    $('wave').textContent=player.wave;
+    $('score').textContent=player.score;
+    $('best').textContent=high;
+    $('teamStatus').innerHTML=
+      `TEAM ${1+drones.filter(d=>d.team==='ally').length} · OPPONENTS ${drones.filter(d=>d.team==='enemy').length} ${player.wave%10===0?'<span class="boss-tag">· BOSS</span>':''}`;
+
+    const boss=drones.find(d=>d.boss);
+    $('bossMeter').style.display=boss?'block':'none';
+    if(boss)$('bossFill').style.width=(100*boss.hp/boss.maxHp)+'%';
+
+    $('healthText').textContent=Math.ceil(player.hp)+' / '+player.maxHp;
+    $('healthFill').style.width=(100*player.hp/player.maxHp)+'%';
+    $('healthFill').style.background=player.hp<player.maxHp*.3?
+      '#ff6879':'linear-gradient(90deg,#12bacd,#7cfbea)';
+    $('ammo').innerHTML=player.reload>0?
+      player.ammo+' <small>RELOADING</small>':
+      player.ammo+' <small>/ ∞</small>';
+
+    if(WEAPONS[player.weapon].kind==='melee')$('ammo').innerHTML='READY';
+    $('reloadButton').style.display=WEAPONS[player.weapon].kind?'none':'block';
+    $('reload').style.display=player.reload>0?'block':'none';
+    $('reload').firstElementChild.style.width=player.reload>0?
+      ((WEAPONS[player.weapon].reload-player.reload)/WEAPONS[player.weapon].reload*100)+'%':'0';
+  }
+
+  function addBot(team){
+    for(let i=0;i<300;i++){
+      const x=rand(2,24),y=rand(2,24),dist=Math.hypot(x-player.x,y-player.y);
+      if(
+        free(x,y,.42)&&
+        dist>(team==='ally'?1.5:6)&&
+        dist<(team==='ally'?5:40)&&
+        drones.every(b=>Math.hypot(b.x-x,b.y-y)>1)
+      ){
+        const hp=team==='enemy'?10+Math.floor((player.wave-1)/2):10;
+        drones.push({
+          x,y,team,angle:rand(-Math.PI,Math.PI),hp,maxHp:hp,
+          phase:rand(0,7),attack:rand(.6,2),turn:0,glow:0,boss:false
+        });
+        return;
+      }
+    }
+  }
+
+  function spawnWave(){
+    player.wave++;
+    player.hp=clamp(player.hp+60,0,player.maxHp);
+    player.ammo=WEAPONS[player.weapon].ammo;
+    player.reload=0;
+    player.magazines=player.loadout.map(w=>WEAPONS[w].ammo);
+    projectiles=[];
+    rings=[];
+    drones=[];
+
+    for(let i=0;i<match.allies;i++)addBot('ally');
+    for(let i=0;i<Math.min(8,match.enemies+Math.floor((player.wave-1)/3));i++)
+      addBot('enemy');
+
+    if(player.wave%10===0){
+      addBot('enemy');
+      const boss=drones.at(-1);
+      if(boss&&boss.team==='enemy'){
+        boss.boss=true;
+        boss.hp=36+player.wave*4;
+        boss.maxHp=boss.hp;
+        boss.attack=.4;
+      }
+    }
+
+    notify(player.wave%10===0?
+      'BOSS ROUND '+player.wave:
+      'ROUND '+player.wave+'  //  '+drones.filter(d=>d.team==='enemy').length+' OPPONENTS'
+    );
+    sound(600,.24,'sine',.06,1000);
+    updateHud();
+  }
+
+  function reset(weapon){
+    buildMap($('mapChoice').value);
+    const mode=$('modeChoice').value;
+    match=mode==='1v1'?{allies:0,enemies:1}:
+      mode==='2v2'?{allies:1,enemies:2}:{
+        allies:clamp(Math.floor(Number($('allyChoice').value)||0),0,4),
+        enemies:clamp(Math.floor(Number($('enemyChoice').value)||1),1,8)
+      };
+
+    player={
+      x:13,y:13,angle:-Math.PI/2,pitch:0,z:0,vz:0,
+      slide:0,slideCooldown:0,slideX:0,slideY:0,
+      hp:200,maxHp:200,ammo:WEAPONS[weapon].ammo,
+      weapon,scoped:false,reload:0,cooldown:0,score:0,
+      wave:0,bob:0,damage:0
+    };
+
+    player.loadout=[
+      $('primaryChoice').value,
+      $('secondaryChoice').value,
+      $('meleeChoice').value,
+      $('throwChoice').value
+    ];
+    player.slot=0;
+    player.weapon=player.loadout[0];
+    player.magazines=player.loadout.map(w=>WEAPONS[w].ammo);
+    player.ammo=player.magazines[0];
+    viewFov=BASE_FOV;
+    drones=[];
+    particles=[];
+    shots=[];
+    respawnTimer=0;
+    spawnWave();
+    $('weaponName').textContent=WEAPONS[weapon].name+' · '+
+      $('mapChoice').selectedOptions[0].textContent.toUpperCase();
+  }
+
+  const ARENA_ENDPOINT=location.hostname.endsWith('.github.io')?
+    'https://neon-grid-lulu-play.timetraveler-lulu.chatgpt.site/api/arena':
+    '/api/arena';
+
+  async function arenaCall(body){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),6000);
+    try{
+      const r=await fetch(ARENA_ENDPOINT,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(body),
+        signal:controller.signal
+      });
+      const data=await r.json();
+      if(!r.ok)throw new Error(data.error||'Arena unavailable');
+      return data;
+    }finally{clearTimeout(timer)}
+  }
+
+  function populateOnlineWeapons(){
+    const select=$('onlineWeapon'),previous=select.value;
+    select.replaceChildren();
+    for(const [id,w] of Object.entries(WEAPONS)){
+      if(
+        !w.kind&&
+        (w.rarity!=='secret'||profile.developer)&&
+        (id==='m4a1'||profile.developer||profile.owned.includes(id))
+      ){
+        const option=document.createElement('option');
+        option.value=id;
+        option.textContent=w.name+' · '+w.rarity.toUpperCase();
+        select.append(option);
+      }
+    }
+    select.value=[...select.options].some(o=>o.value===previous)?previous:'m4a1';
+    updateOnlineWeaponInfo();
+  }
+
+  function updateOnlineWeaponInfo(){
+    const w=WEAPONS[$('onlineWeapon').value];
+    if(w)$('onlineWeaponInfo').textContent=
+      ({eclipse:50,phantom:65}[$('onlineWeapon').value]||Math.round(w.damage*12.5))+
+      ' DAMAGE · '+w.ammo+' AMMO · '+w.reload+'s RELOAD';
+  }
+
+  $('onlineWeapon').addEventListener('change',updateOnlineWeaponInfo);
+
+  function showOnline(){
+    populateOnlineWeapons();
+    state='online';
+    $('cheatPanel').style.display='none';
+    refreshCheats();
+    $('menuContent').style.display='none';
+    $('weaponSelect').style.display='none';
+    $('onlinePanel').style.display='block';
+    $('roomMessage').textContent='';
+  }
+
+  function returnToMenu(){
+    state='menu';
+    $('cheatPanel').style.display='none';
+    refreshCheats();
+    keys={};
+    hud.classList.remove('on');
+    $('slots').style.display='none';
+    $('onlineHud').style.display='none';
+    $('bossMeter').style.display='none';
+    overlay.style.display='flex';
+    $('onlinePanel').style.display='none';
+    $('weaponSelect').style.display='none';
+    $('menuContent').style.display='block';
+    $('play').textContent='PLAY →';
+    $('description').textContent=
+      'Battle through rounds, earn XP, and build your loadout. Every 10th round has a boss.';
+    if(player)player.scoped=false;
+    hadMouseLock=false;
+    document.exitPointerLock?.();
+  }
+
+  async function connectRoom(action){
+    if(joiningRoom)return;
+    joiningRoom=true;
+    $('roomMessage').textContent='Connecting…';
+    $('createRoom').disabled=$('joinRoom').disabled=true;
+    try{
+      const data=await arenaCall({
+        action,
+        weapon:$('onlineWeapon').value,
+        name:$('playerName').value,
+        map
